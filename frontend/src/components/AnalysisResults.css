@@ -1,0 +1,172 @@
+.analysis-results {
+  margin-top: 30px;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.tab {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  color: #666;
+  transition: all 0.3s ease;
+}
+
+.tab:hover {
+  color: #667eea;
+  background: #f8f9fa;
+}
+
+.tab.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+}
+
+.tab-content {
+  margin-top: 20px;
+}
+
+.overview {
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.defect-summary {
+  margin-top: 30px;
+}
+
+.defect-summary h3 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.defect-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.defect-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.defect-type {
+  font-weight: 600;
+  color: #333;
+}
+
+.defect-count {
+  background: #667eea;
+  color: white;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.report-download {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.defects-list, .root-causes-list {
+  display: grid;
+  gap: 20px;
+}
+
+.defect-card, .root-cause-card {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 10px;
+  border-left: 4px solid #667eea;
+}
+
+.defect-header, .root-cause-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.defect-header h4, .root-cause-header h4 {
+  color: #333;
+  margin: 0;
+}
+
+.defect-details, .root-cause-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-row {
+  display: flex;
+  gap: 10px;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #666;
+  min-width: 120px;
+}
+
+.detail-value {
+  color: #333;
+}
+
+.recommendations {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.recommendations h5 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.recommendations ul {
+  margin-left: 20px;
+}
+
+.recommendations li {
+  margin-bottom: 8px;
+  color: #555;
+}
+
+.charts {
+  display: grid;
+  gap: 30px;
+}
+
+.chart-container {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.chart-container h3 {
+  margin-bottom: 20px;
+  color: #333;
+  text-align: center;
+}
+

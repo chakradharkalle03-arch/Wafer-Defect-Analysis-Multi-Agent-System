@@ -1,0 +1,85 @@
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-weight: 600;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.dropzone {
+  border: 3px dashed #667eea;
+  border-radius: 15px;
+  padding: 60px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+}
+
+.dropzone:hover:not(.disabled) {
+  background: #e9ecef;
+  border-color: #764ba2;
+}
+
+.dropzone.active {
+  background: #e3f2fd;
+  border-color: #2196f3;
+  border-style: solid;
+}
+
+.dropzone.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.upload-status p {
+  color: #666;
+  font-size: 16px;
+}
+
+.upload-hint {
+  font-size: 14px;
+  color: #999;
+}
+
+.uploaded-file {
+  color: #667eea;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.status-text {
+  font-size: 14px;
+  color: #999;
+  font-style: italic;
+}
+
