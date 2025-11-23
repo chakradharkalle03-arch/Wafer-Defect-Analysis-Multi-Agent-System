@@ -11,6 +11,7 @@ from app.agents.image_agent import ImageAgent
 from app.agents.classification_agent import ClassificationAgent
 from app.agents.root_cause_agent import RootCauseAgent
 from app.agents.report_agent import ReportAgent
+from app.agents.mapping_agent import MappingAgent
 
 # Advanced agents (optional)
 try:
@@ -72,6 +73,7 @@ class SupervisorAgent:
         # Initialize all agents
         self.image_agent = ImageAgent()
         self.classification_agent = ClassificationAgent()
+        self.mapping_agent = MappingAgent()
         
         # Use advanced agents if available
         if ADVANCED_AGENTS_AVAILABLE:
@@ -96,6 +98,7 @@ class SupervisorAgent:
         self.agents = {
             "image_agent": self.image_agent,
             "classification_agent": self.classification_agent,
+            "mapping_agent": self.mapping_agent,
             "root_cause_agent": self.root_cause_agent,
             "report_agent": self.report_agent
         }
@@ -112,8 +115,8 @@ class SupervisorAgent:
         Intelligent routing - determines which agents to execute and in what order
         Returns list of agent names in execution order
         """
-        # Standard workflow: Image -> Classification -> Root Cause -> Report
-        route = ["image_agent", "classification_agent", "root_cause_agent", "report_agent"]
+        # Standard workflow: Image -> Classification -> Mapping -> Root Cause -> Report
+        route = ["image_agent", "classification_agent", "mapping_agent", "root_cause_agent", "report_agent"]
         
         # Future: Could add conditional routing based on:
         # - Image type (SEM vs optical)
@@ -150,6 +153,13 @@ class SupervisorAgent:
                 result = agent.analyze_image(kwargs.get('image_path'))
             elif agent_name == "classification_agent":
                 result = agent.classify_defects(kwargs.get('defects', []))
+            elif agent_name == "mapping_agent":
+                result = agent.create_defect_map(
+                    defects=kwargs.get('defects', []),
+                    classifications=kwargs.get('classifications', []),
+                    image_path=kwargs.get('image_path'),
+                    analysis_id=kwargs.get('analysis_id', '')
+                )
             elif agent_name == "root_cause_agent":
                 classifications = kwargs.get('classifications', [])
                 total_defects = kwargs.get('total_defects', 0)
@@ -208,6 +218,7 @@ class SupervisorAgent:
         aggregated = {
             "defects": [],
             "classifications": [],
+            "defect_map": None,
             "root_causes": [],
             "report_path": None,
             "execution_summary": {}
@@ -219,6 +230,9 @@ class SupervisorAgent:
         
         if "classification_agent" in results and results["classification_agent"].status == AgentStatus.COMPLETED:
             aggregated["classifications"] = results["classification_agent"].result or []
+        
+        if "mapping_agent" in results and results["mapping_agent"].status == AgentStatus.COMPLETED:
+            aggregated["defect_map"] = results["mapping_agent"].result
         
         if "root_cause_agent" in results and results["root_cause_agent"].status == AgentStatus.COMPLETED:
             aggregated["root_causes"] = results["root_cause_agent"].result or []
@@ -319,7 +333,23 @@ class SupervisorAgent:
         else:
             classifications = classification_result.result
         
-        # 3. Root Cause Agent
+        # 3. Mapping Agent
+        mapping_result = self.execute_agent(
+            "mapping_agent",
+            defects=defects,
+            classifications=classifications,
+            image_path=image_path,
+            analysis_id=analysis_id
+        )
+        results["mapping_agent"] = mapping_result
+        
+        if mapping_result.status != AgentStatus.COMPLETED:
+            logger.warning(f"Mapping failed: {mapping_result.error}")
+            defect_map_data = None
+        else:
+            defect_map_data = mapping_result.result
+        
+        # 4. Root Cause Agent
         root_cause_result = self.execute_agent(
             "root_cause_agent",
             classifications=classifications,
@@ -334,7 +364,7 @@ class SupervisorAgent:
         else:
             root_causes = root_cause_result.result
         
-        # 4. Build analysis response
+        # 5. Build analysis response
         defect_summary = {}
         for classification in classifications:
             if hasattr(classification, 'defect_type'):
@@ -359,7 +389,12 @@ class SupervisorAgent:
             severity_score=severity_score
         )
         
-        # 5. Report Agent
+        # Add defect map to response
+        if defect_map_data:
+            from app.models.schemas import DefectMapData
+            analysis_response.defect_map = DefectMapData(**defect_map_data)
+        
+        # 6. Report Agent
         report_result = self.execute_agent(
             "report_agent",
             analysis_response=analysis_response,

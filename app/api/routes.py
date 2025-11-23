@@ -49,6 +49,7 @@ async def health_check():
             "supervisor_agent": orch.supervisor is not None,
             "image_agent": orch.image_agent is not None,
             "classification_agent": orch.classification_agent is not None,
+            "mapping_agent": orch.mapping_agent is not None,
             "root_cause_agent": orch.root_cause_agent is not None,
             "report_agent": orch.report_agent is not None
         }
@@ -216,6 +217,30 @@ async def get_analysis(analysis_id: str):
     """
     # Placeholder - in production, store analyses in database
     raise HTTPException(status_code=501, detail="Analysis retrieval not yet implemented")
+
+
+@router.get("/map/{map_filename}")
+async def get_map_image(map_filename: str):
+    """
+    Serve defect map images
+    """
+    try:
+        map_path = Path("reports/plots") / map_filename
+        
+        if not map_path.exists():
+            raise HTTPException(status_code=404, detail="Map image not found")
+        
+        return FileResponse(
+            path=str(map_path),
+            filename=map_filename,
+            media_type="image/png"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving map image: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve map image: {str(e)}")
 
 
 def cleanup_old_files(directory: Path, max_age_days: int = 7):

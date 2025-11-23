@@ -75,6 +75,31 @@ class ImageAnalysisRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class DefectPosition(BaseModel):
+    """Defect position in spatial map"""
+    defect_id: str
+    center: List[float] = Field(..., description="Center coordinates [x, y]")
+    bbox: Dict[str, float]
+    type: str
+    confidence: float
+
+
+class DefectCluster(BaseModel):
+    """Defect cluster information"""
+    cluster_id: str
+    size: int
+    defects: List[DefectPosition]
+
+
+class DefectMapData(BaseModel):
+    """Defect mapping data"""
+    map_image_path: Optional[str] = None
+    spatial_statistics: Dict[str, Any]
+    clusters: List[DefectCluster]
+    density_map: List[List[float]]
+    defect_positions: List[DefectPosition]
+
+
 class ImageAnalysisResponse(BaseModel):
     """Complete image analysis response"""
     analysis_id: str
@@ -99,6 +124,9 @@ class ImageAnalysisResponse(BaseModel):
     
     # Report
     report_path: Optional[str] = None
+    
+    # Defect mapping
+    defect_map: Optional[DefectMapData] = None
 
 
 class ReportRequest(BaseModel):

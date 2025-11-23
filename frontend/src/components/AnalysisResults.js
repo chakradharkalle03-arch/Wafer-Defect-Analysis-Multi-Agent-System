@@ -68,6 +68,14 @@ function AnalysisResults({ result }) {
         >
           Analytics
         </button>
+        {result.defect_map && (
+          <button
+            className={activeTab === 'map' ? 'tab active' : 'tab'}
+            onClick={() => setActiveTab('map')}
+          >
+            Defect Map
+          </button>
+        )}
       </div>
 
       {/* Tab Content */}
@@ -247,6 +255,139 @@ function AnalysisResults({ result }) {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'map' && result.defect_map && (
+          <div className="defect-map">
+            <h3>Wafer Defect Spatial Map</h3>
+            
+            {/* Map Image */}
+            {result.defect_map.map_image_path && (
+              <div className="map-image-container">
+                <img 
+                  src={`${process.env.REACT_APP_API_URL || 'http://localhost:8001'}/api/v1/map/${result.defect_map.map_image_path.split('/').pop()}`}
+                  alt="Defect Map"
+                  className="defect-map-image"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling && (e.target.nextSibling.style.display = 'block');
+                  }}
+                />
+                <div style={{display: 'none', padding: '20px', color: '#666'}}>
+                  Map image not available. Path: {result.defect_map.map_image_path}
+                </div>
+              </div>
+            )}
+
+            {/* Spatial Statistics */}
+            {result.defect_map.spatial_statistics && (
+              <div className="spatial-statistics">
+                <h4>Spatial Analysis</h4>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <span className="stat-label">Clusters Found:</span>
+                    <span className="stat-value">{result.defect_map.spatial_statistics.num_clusters || 0}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Defect Density:</span>
+                    <span className="stat-value">
+                      {(result.defect_map.spatial_statistics.defect_density || 0).toFixed(4)} defects/pixel²
+                    </span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Mean Distance from Centroid:</span>
+                    <span className="stat-value">
+                      {(result.defect_map.spatial_statistics.mean_distance_from_centroid || 0).toFixed(1)} pixels
+                    </span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Spatial Uniformity:</span>
+                    <span className="stat-value">
+                      {(result.defect_map.spatial_statistics.spatial_uniformity || 0).toFixed(3)}
+                    </span>
+                  </div>
+                  {result.defect_map.spatial_statistics.centroid && (
+                    <>
+                      <div className="stat-item">
+                        <span className="stat-label">Centroid X:</span>
+                        <span className="stat-value">
+                          {result.defect_map.spatial_statistics.centroid.x.toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-label">Centroid Y:</span>
+                        <span className="stat-value">
+                          {result.defect_map.spatial_statistics.centroid.y.toFixed(1)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Clusters */}
+            {result.defect_map.clusters && result.defect_map.clusters.length > 0 && (
+              <div className="clusters-section">
+                <h4>Defect Clusters ({result.defect_map.clusters.length})</h4>
+                <div className="clusters-list">
+                  {result.defect_map.clusters.map((cluster) => (
+                    <div key={cluster.cluster_id} className="cluster-card">
+                      <div className="cluster-header">
+                        <h5>{cluster.cluster_id}</h5>
+                        <span className="badge badge-info">{cluster.size} defects</span>
+                      </div>
+                      <div className="cluster-defects">
+                        {cluster.defects.slice(0, 5).map((defect) => (
+                          <div key={defect.defect_id} className="cluster-defect-item">
+                            <span>{defect.defect_id}</span>
+                            <span className="defect-type-badge">{defect.type}</span>
+                          </div>
+                        ))}
+                        {cluster.defects.length > 5 && (
+                          <div className="more-defects">+{cluster.defects.length - 5} more</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Defect Positions */}
+            {result.defect_map.defect_positions && result.defect_map.defect_positions.length > 0 && (
+              <div className="defect-positions">
+                <h4>Defect Positions</h4>
+                <div className="positions-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Defect ID</th>
+                        <th>Type</th>
+                        <th>Center (X, Y)</th>
+                        <th>Confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.defect_map.defect_positions.slice(0, 20).map((pos) => (
+                        <tr key={pos.defect_id}>
+                          <td>{pos.defect_id}</td>
+                          <td>{pos.type.replace('_', ' ')}</td>
+                          <td>({pos.center[0].toFixed(1)}, {pos.center[1].toFixed(1)})</td>
+                          <td>{(pos.confidence * 100).toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {result.defect_map.defect_positions.length > 20 && (
+                    <div className="more-positions">
+                      Showing first 20 of {result.defect_map.defect_positions.length} defects
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -14,6 +14,7 @@ from typing_extensions import TypedDict
 
 from app.agents.image_agent import ImageAgent
 from app.agents.classification_agent import ClassificationAgent
+from app.agents.mapping_agent import MappingAgent
 from app.agents.root_cause_agent import RootCauseAgent
 from app.agents.report_agent import ReportAgent
 
@@ -47,6 +48,7 @@ class SupervisorState(TypedDict):
     batch_id: Optional[str]
     defects: List[Dict]  # Store as dicts for LangGraph compatibility
     classifications: List[Dict]
+    defect_map: Optional[Dict]
     root_causes: List[Dict]
     report_path: Optional[str]
     analysis_id: str
@@ -70,6 +72,7 @@ class LangGraphSupervisorAgent:
         # Initialize all agents
         self.image_agent = ImageAgent()
         self.classification_agent = ClassificationAgent()
+        self.mapping_agent = MappingAgent()
         
         # Use advanced agents if available
         if ADVANCED_AGENTS_AVAILABLE:
@@ -105,6 +108,7 @@ class LangGraphSupervisorAgent:
         # Add agent nodes
         workflow.add_node("image_agent", self._image_agent_node)
         workflow.add_node("classification_agent", self._classification_agent_node)
+        workflow.add_node("mapping_agent", self._mapping_agent_node)
         workflow.add_node("root_cause_agent", self._root_cause_agent_node)
         workflow.add_node("report_agent", self._report_agent_node)
         workflow.add_node("supervisor", self._supervisor_node)  # Supervisor routing node
@@ -119,6 +123,7 @@ class LangGraphSupervisorAgent:
             {
                 "image_agent": "image_agent",
                 "classification_agent": "classification_agent",
+                "mapping_agent": "mapping_agent",
                 "root_cause_agent": "root_cause_agent",
                 "report_agent": "report_agent",
                 "end": END
@@ -128,6 +133,7 @@ class LangGraphSupervisorAgent:
         # Agent execution flow
         workflow.add_edge("image_agent", "supervisor")
         workflow.add_edge("classification_agent", "supervisor")
+        workflow.add_edge("mapping_agent", "supervisor")
         workflow.add_edge("root_cause_agent", "supervisor")
         workflow.add_edge("report_agent", END)
         
@@ -147,6 +153,9 @@ class LangGraphSupervisorAgent:
         elif not state.get("classifications"):
             # Defects found but not classified - route to classification agent
             state["next_agent"] = "classification_agent"
+        elif not state.get("defect_map"):
+            # Classified but not mapped - route to mapping agent
+            state["next_agent"] = "mapping_agent"
         elif not state.get("root_causes"):
             # Classified but no root causes - route to root cause agent
             state["next_agent"] = "root_cause_agent"
@@ -221,6 +230,42 @@ class LangGraphSupervisorAgent:
         
         return state
     
+    def _mapping_agent_node(self, state: SupervisorState) -> SupervisorState:
+        """Mapping Agent node - creates defect map"""
+        try:
+            logger.info("Supervisor: Executing Mapping Agent...")
+            
+            # Convert dicts back to Pydantic models
+            defects_data = state.get("defects", [])
+            defects = [DefectDetection(**d) if isinstance(d, dict) else d for d in defects_data]
+            
+            classifications_data = state.get("classifications", [])
+            classifications = [ClassificationResult(**c) if isinstance(c, dict) else c for c in classifications_data]
+            
+            # Create defect map
+            defect_map_result = self.mapping_agent.create_defect_map(
+                defects=defects,
+                classifications=classifications,
+                image_path=state["image_path"],
+                analysis_id=state["analysis_id"]
+            )
+            
+            state["defect_map"] = defect_map_result
+            state["agent_results"]["mapping_agent"] = {
+                "status": "completed",
+                "clusters_count": len(defect_map_result.get("clusters", []))
+            }
+            
+            logger.info(f"Supervisor: Mapping Agent created map with {len(defect_map_result.get('clusters', []))} clusters")
+            
+        except Exception as e:
+            logger.error(f"Mapping Agent failed: {e}")
+            state["error"] = f"Mapping failed: {str(e)}"
+            state["defect_map"] = None
+            state["agent_results"]["mapping_agent"] = {"status": "failed", "error": str(e)}
+        
+        return state
+    
     def _root_cause_agent_node(self, state: SupervisorState) -> SupervisorState:
         """Root Cause Agent node - analyzes root causes"""
         try:
@@ -285,6 +330,10 @@ class LangGraphSupervisorAgent:
             defect_density = len(defects) / 1000.0
             severity_score = min(avg_confidence * (1 + defect_density), 1.0)
             
+            from app.models.schemas import DefectMapData
+            
+            defect_map_data = state.get("defect_map")
+            
             analysis_response = ImageAnalysisResponse(
                 analysis_id=state["analysis_id"],
                 wafer_id=state.get("wafer_id"),
@@ -296,7 +345,8 @@ class LangGraphSupervisorAgent:
                 classifications=classifications,
                 root_causes=root_causes,
                 defect_summary=defect_summary,
-                severity_score=severity_score
+                severity_score=severity_score,
+                defect_map=DefectMapData(**defect_map_data) if defect_map_data else None
             )
             
             # Generate report
@@ -345,6 +395,7 @@ class LangGraphSupervisorAgent:
             "batch_id": batch_id,
             "defects": [],
             "classifications": [],
+            "defect_map": None,
             "root_causes": [],
             "report_path": None,
             "analysis_id": analysis_id,
@@ -381,6 +432,10 @@ class LangGraphSupervisorAgent:
         defect_density = len(defects) / 1000.0
         severity_score = min(avg_confidence * (1 + defect_density), 1.0)
         
+        from app.models.schemas import DefectMapData
+        
+        defect_map_data = final_state.get("defect_map")
+        
         response = ImageAnalysisResponse(
             analysis_id=analysis_id,
             wafer_id=wafer_id,
@@ -393,7 +448,8 @@ class LangGraphSupervisorAgent:
             root_causes=root_causes,
             defect_summary=defect_summary,
             severity_score=severity_score,
-            report_path=final_state.get("report_path")
+            report_path=final_state.get("report_path"),
+            defect_map=DefectMapData(**defect_map_data) if defect_map_data else None
         )
         
         logger.info(f"Supervisor: LangGraph analysis {analysis_id} completed")
@@ -408,6 +464,7 @@ class LangGraphSupervisorAgent:
             "agents": {
                 "image_agent": "ready",
                 "classification_agent": "ready",
+                "mapping_agent": "ready",
                 "root_cause_agent": "ready",
                 "report_agent": "ready"
             },

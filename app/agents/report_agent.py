@@ -171,6 +171,70 @@ class ReportAgent:
                 elements.append(img)
                 elements.append(Spacer(1, 0.2*inch))
         
+        # Add Defect Map Section if available
+        if analysis.defect_map and analysis.defect_map.map_image_path:
+            elements.append(PageBreak())
+            elements.append(Paragraph("Defect Spatial Mapping", styles['Heading2']))
+            elements.append(Spacer(1, 0.2*inch))
+            
+            # Add defect map image
+            map_image_path = Path(analysis.defect_map.map_image_path)
+            if map_image_path.exists():
+                map_img = Image(str(map_image_path), width=7*inch, height=5.25*inch)
+                elements.append(map_img)
+                elements.append(Spacer(1, 0.2*inch))
+            
+            # Add spatial statistics
+            if analysis.defect_map.spatial_statistics:
+                stats = analysis.defect_map.spatial_statistics
+                elements.append(Paragraph("Spatial Analysis Statistics", styles['Heading3']))
+                
+                spatial_data = [
+                    ['Metric', 'Value'],
+                    ['Total Clusters', str(stats.get('num_clusters', 0))],
+                    ['Defect Density', f"{stats.get('defect_density', 0):.4f} defects/pixel²"],
+                    ['Mean Distance from Centroid', f"{stats.get('mean_distance_from_centroid', 0):.1f} pixels"],
+                    ['Std Distance from Centroid', f"{stats.get('std_distance_from_centroid', 0):.1f} pixels"],
+                    ['Radial Mean', f"{stats.get('radial_mean', 0):.1f} pixels"],
+                    ['Radial Std', f"{stats.get('radial_std', 0):.1f} pixels"],
+                    ['Spatial Uniformity', f"{stats.get('spatial_uniformity', 0):.3f}"]
+                ]
+                
+                if stats.get('centroid'):
+                    spatial_data.append(['Centroid X', f"{stats['centroid'].get('x', 0):.1f}"])
+                    spatial_data.append(['Centroid Y', f"{stats['centroid'].get('y', 0):.1f}"])
+                
+                spatial_table = Table(spatial_data, colWidths=[3*inch, 3*inch])
+                spatial_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 11),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (1, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                elements.append(spatial_table)
+                elements.append(Spacer(1, 0.2*inch))
+            
+            # Add cluster information
+            if analysis.defect_map.clusters and len(analysis.defect_map.clusters) > 0:
+                elements.append(Paragraph("Defect Clusters", styles['Heading3']))
+                cluster_text = f"Analysis identified {len(analysis.defect_map.clusters)} defect cluster(s):"
+                elements.append(Paragraph(cluster_text, styles['Normal']))
+                elements.append(Spacer(1, 0.1*inch))
+                
+                for cluster in analysis.defect_map.clusters:
+                    cluster_info = f"<b>{cluster.cluster_id}</b>: {cluster.size} defects"
+                    elements.append(Paragraph(cluster_info, styles['Normal']))
+                    if cluster.defects:
+                        defect_list = ", ".join([d.defect_id for d in cluster.defects[:10]])
+                        if len(cluster.defects) > 10:
+                            defect_list += f" ... and {len(cluster.defects) - 10} more"
+                        elements.append(Paragraph(f"Defects: {defect_list}", styles['Normal']))
+                    elements.append(Spacer(1, 0.1*inch))
+        
         elements.append(PageBreak())
         
         # Detailed Defect Analysis
@@ -475,6 +539,21 @@ class ReportAgent:
                 for c in analysis.classifications
             ]
         }
+        
+        # Add defect map data if available
+        if analysis.defect_map:
+            report_data["defect_map"] = {
+                "map_image_path": analysis.defect_map.map_image_path,
+                "spatial_statistics": analysis.defect_map.spatial_statistics,
+                "clusters": [
+                    {
+                        "cluster_id": c.cluster_id,
+                        "size": c.size,
+                        "defects": [d.defect_id for d in c.defects]
+                    }
+                    for c in analysis.defect_map.clusters
+                ]
+            }
         
         with open(report_path, 'w') as f:
             json.dump(report_data, f, indent=2)

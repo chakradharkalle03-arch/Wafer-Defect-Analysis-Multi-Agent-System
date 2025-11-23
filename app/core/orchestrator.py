@@ -29,6 +29,7 @@ class AgentState(TypedDict):
     batch_id: Optional[str]
     defects: List[Dict]  # Store as dicts to avoid LangGraph message coercion
     classifications: List[Dict]  # Store as dicts to avoid LangGraph message coercion
+    defect_map: Optional[Dict]  # Defect mapping data
     root_causes: List[Dict]  # Store as dicts to avoid LangGraph message coercion
     report_path: Optional[str]
     analysis_id: str
@@ -53,6 +54,7 @@ class MultiAgentOrchestrator:
         # Expose agents for backward compatibility
         self.image_agent = self.supervisor.image_agent
         self.classification_agent = self.supervisor.classification_agent
+        self.mapping_agent = self.supervisor.mapping_agent
         self.root_cause_agent = self.supervisor.root_cause_agent
         self.report_agent = self.supervisor.report_agent
         
@@ -71,6 +73,7 @@ class MultiAgentOrchestrator:
         # Add nodes with advanced capabilities
         workflow.add_node("image_analysis", self._image_analysis_node)
         workflow.add_node("classification", self._classification_node)
+        workflow.add_node("mapping", self._mapping_node)
         workflow.add_node("root_cause", self._root_cause_node)
         workflow.add_node("report_generation", self._report_generation_node)
         workflow.add_node("quality_check", self._quality_check_node)  # New: quality validation
@@ -78,10 +81,11 @@ class MultiAgentOrchestrator:
         # Define intelligent routing
         workflow.set_entry_point("image_analysis")
         workflow.add_edge("image_analysis", "classification")
+        workflow.add_edge("classification", "mapping")
         
         # Conditional routing based on defect count
         workflow.add_conditional_edges(
-            "classification",
+            "mapping",
             self._should_do_advanced_rca,  # Decision function
             {
                 "high_priority": "root_cause",  # Many defects -> advanced RCA
@@ -193,6 +197,43 @@ class MultiAgentOrchestrator:
         
         return state
     
+    def _mapping_node(self, state: AgentState) -> AgentState:
+        """Defect mapping node"""
+        try:
+            logger.info("Mapping Agent: Creating defect map")
+            
+            defects_data = state.get('defects', [])
+            classifications_data = state.get('classifications', [])
+            
+            if not defects_data:
+                logger.warning("No defects to map")
+                state['defect_map'] = None
+                return state
+            
+            # Convert dicts back to Pydantic models
+            defects = [DefectDetection(**d) if isinstance(d, dict) else d for d in defects_data]
+            classifications = [ClassificationResult(**c) if isinstance(c, dict) else c for c in classifications_data]
+            
+            # Create defect map
+            defect_map_result = self.mapping_agent.create_defect_map(
+                defects=defects,
+                classifications=classifications,
+                image_path=state['image_path'],
+                analysis_id=state['analysis_id']
+            )
+            
+            # Store in state
+            state['defect_map'] = defect_map_result
+            
+            logger.info(f"Mapping Agent: Created defect map with {len(defect_map_result.get('clusters', []))} clusters")
+            
+        except Exception as e:
+            logger.error(f"Error in mapping: {e}")
+            state['error'] = f"Mapping failed: {str(e)}"
+            state['defect_map'] = None
+        
+        return state
+    
     def _root_cause_node(self, state: AgentState) -> AgentState:
         """Advanced root cause analysis node with intelligent reasoning"""
         try:
@@ -283,6 +324,9 @@ class MultiAgentOrchestrator:
             root_causes_data = state.get('root_causes', [])
             root_causes = [RootCauseAnalysis(**rc) if isinstance(rc, dict) else rc for rc in root_causes_data]
             
+            # Get defect map data
+            defect_map_data = state.get('defect_map')
+            
             # Calculate defect summary
             defect_summary = {}
             for classification in classifications:
@@ -297,6 +341,8 @@ class MultiAgentOrchestrator:
             else:
                 severity_score = 0.0
             
+            from app.models.schemas import DefectMapData
+            
             analysis_response = ImageAnalysisResponse(
                 analysis_id=state['analysis_id'],
                 wafer_id=state.get('wafer_id'),
@@ -308,7 +354,8 @@ class MultiAgentOrchestrator:
                 classifications=classifications,
                 root_causes=root_causes,
                 defect_summary=defect_summary,
-                severity_score=severity_score
+                severity_score=severity_score,
+                defect_map=DefectMapData(**defect_map_data) if defect_map_data else None
             )
             
             # Generate report (use advanced if available)
